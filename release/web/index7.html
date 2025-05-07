@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>St.Himark PGA</title>
+    <style>
+        #controls {
+            position: fixed;
+            top: 0px;
+            left: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 8px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 999;
+        }
+        #timestamp {
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+            padding: 10px;
+            background: #f0f0f0;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 8px;
+            background: white;
+            border: 1px solid #ddd;
+            pointer-events: none;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+    <input type="range" min="1" max="10" value="1" oninput="changeSpeed(this.value)">
+    <span id="speed-display">1x</span> <!-- 新增显示元素 -->
+    <div id="controls">
+        <button onclick="togglePlay()">⏸️</button>
+        <input type="range" min="1" max="10" onchange="changeSpeed(this.value)">
+    </div>
+
+    <div id="timestamp">Loading initial data...</div>
+    <svg width="760" height="600"></svg>
+    
+    <!-- <script src="https://d3js.org/d3.v7.min.js"></script> -->
+    <script src="js/d3.v7.min.js"></script>
+
+    <script>
+        // 配置参数
+        const DATA_DIR = "./main_pag_stage/";  // 数据目录
+        // const INTERVAL = 2000;  // 2秒间隔
+        // 将 const 改为 let 以支持重新赋值
+        let INTERVAL = 2000;  // 初始2秒间隔
+
+        const COLOR_MAP = new Map([
+            [0.5, "#cccccc"],   // 浅灰色
+            [1.0, "#96edff"],
+            [2.0, "#87f9ff"],
+            [5.0, "#7cffb7"],
+            [10.0, "#dfff22"],
+            [20.0, "#ffcd00"]
+        ]);
+
+        // 行政区域颜色配置
+        const idColors = [
+            "#ff7f94", "#bf7fff", "#fff87f", "#ff7ff0",
+            "#ffc57f", "#7fd4ff", "#82b97f", "#fff87f",
+            "#bf7fff", "#7fffff", "#ffd47f", "#ff7f7f",
+            "#7fddff", "#7ffff0", "#847fff", "#aaff7f",
+            "#fffb7f", "#ffd07f", "#ff7f7f"
+        ];
+        let isPlaying = true;
+        let intervalId;
+        // 初始化
+        const svg = d3.select("svg");
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip");
+
+        let projection;
+        let path;
+
+
+        // 在initMap函数中添加区域14的路径引用
+        let region14Path; // 新增全局变量
+        let regionColors = {
+            '14': {} // 结构：{timestamp: color}
+        };
+
+        const REGION_IDS = [2,3,4,7,11,12,13,14,15,18]; // 所有需要处理的区域ID
+        let regionPaths = new Map(); // 存储所有区域路径引用
+
+        async function initMap() {
+        try {
+            // 加载行政地图数据
+            const St_Himak = await d3.json("data/all.json.geojson");
+            
+            // 统一投影设置
+            projection = d3.geoMercator()
+                .center([-1.3066, 37.3002])
+                .scale(120000)
+                .translate([760/2, 600/2]);
+
+            path = d3.geoPath().projection(projection);
+
+            // 绘制行政地图
+            const regions = svg.selectAll(".region")
+                .data(St_Himak.features)                
+                .enter().append("g")
+
+                .attr("class", d => `region-group-${d.properties.id}`); // 添加分组类名
+
+
+
+            // 添加路径
+            regions.append("path")
+                .attr("class", d => `region-${d.properties.id}`)
+                .attr("d", path)
+                .each(function(d) {
+                    if(REGION_IDS.includes(Number(d.properties.id))) {
+                        regionPaths.set(d.properties.id, d3.select(this));
+                    }
+                })
+                // .attr("fill", d => {
+                //     const id = parseInt(d.properties.id) - 1;
+                //     return idColors[id] || "#cccccc";
+                // })
+                .attr("fill", d => REGION_IDS.includes(Number(d.properties.id)) 
+                    ? "#cccccc" // 初始化为灰色
+                    : idColors[parseInt(d.properties.id)-1])
+                .attr("fill-opacity", 0.3)
+                .attr("stroke", "#333")
+                .attr("stroke-width", 0.5);
+
+            // 添加文本标签
+            regions.each(function(d) {
+                const centroid = path.centroid(d);
+                const g = d3.select(this);
+                
+                // 添加ID文本
+                g.append("text")
+                    .attr("x", centroid[0])
+                    .attr("y", centroid[1])
+                    .attr("dy", "-0.5em")  // 上移半行
+                    .attr("text-anchor", "middle")
+                    .style("font-size", "10px")
+                    .style("fill", "#333")
+                    .text(d.properties.id);
+
+                // 添加名称文本
+                g.append("text")
+                    .attr("x", centroid[0])
+                    .attr("y", centroid[1])
+                    .attr("dy", "1em")  // 下移一行
+                    .attr("text-anchor", "middle")
+                    .style("font-size", "8px")
+                    .style("fill", "#666")
+                    .text(d.properties.name);
+            });
+            // 保存区域14的路径引用
+            // region14Path = svg.select(".region-14 path");
+            // region14Path = d3.select(".region-14");
+
+            // console.log("区域14路径验证:", region14Path.node());
+
+
+            // 新增：加载区域颜色数据
+            // const csvData = await d3.csv("viz/seismic_14.csv");
+            // // 正确提取MMDDHHmm格式时间戳
+            // regionColors['14'] = csvData.reduce((acc, row) => {
+            //     // 原始时间格式：04060000 直接作为键
+            //     const timestamp = row.time; 
+            //     acc[timestamp] = row.color;
+            //     return acc;
+            // }, {});
+            // console.log("区域颜色数据加载完成:", regionColors);
+            
+
+            // 并行加载所有区域颜色数据
+            const colorPromises = REGION_IDS.map(async id => {
+                try {
+                    const data = await d3.csv(`viz/seismic_${id}.csv`);
+                    return {
+                        id,
+                        colors: data.reduce((acc, row) => {
+                            acc[row.time] = row.color;
+                            return acc;
+                        }, {})
+                    };
+                } catch (error) {
+                    console.error(`区域${id}颜色数据加载失败:`, error);
+                    return { id, colors: {} };
+                }
+            });
+
+            // 存储颜色数据
+            const colorResults = await Promise.all(colorPromises);
+            colorResults.forEach(result => {
+                regionColors[result.id] = result.colors;
+            });
+
+
+        } catch (error) {
+            console.error("行政地图加载失败:", error);
+        }
+    }
+
+        // 生成文件列表（2020-04-06 00:00 到 2020-04-10 22:00）
+        // const start = new Date("2020-04-06T00:00");
+        // const end = new Date("2020-04-10T22:00");
+        const start = new Date("2020-04-06T00:00Z");  // 明确指定为 UTC 时间
+        const end = new Date("2020-04-09T16:00Z");    // 明确指定为 UTC 时间
+        const files = [];
+        
+        for (let t = new Date(start); t <= end; t.setUTCHours(t.getUTCHours() + 1)) {
+    // 使用UTC时间组件构建文件名
+            const year = t.getUTCFullYear();
+            const month = String(t.getUTCMonth() + 1).padStart(2, "0");
+            const day = String(t.getUTCDate()).padStart(2, "0");
+            const hours = String(t.getUTCHours()).padStart(2, "0");
+            
+            const filename = `pga_${year}${month}${day}${hours}00.json`;
+            files.push(filename);
+        }
+
+        console.log("装载PGA数据",files.slice(0, 3)); 
+        console.log("装载PGA数据",files); 
+
+
+        // 颜色比例尺
+        const colorScale = d3.scaleThreshold()
+            .domain([...COLOR_MAP.keys()].slice(1))
+            .range([...COLOR_MAP.values()]);
+
+        // 投影配置
+        // const projection = d3.geoMercator()
+        //     .center([-1.23, 37.38])  // 根据数据范围设置中心点
+        //     .scale(50000);
+
+        // const path = d3.geoPath().projection(projection);
+
+        // 主加载逻辑
+        let currentFileIndex = 0;
+        
+        async function loadAndRender() {
+            const filename = files[currentFileIndex];
+            console.log("加载文件:", filename);
+
+            try {
+                // 解析当前时间戳（MMDDHHmm格式）
+                // const timestamp = filename.match(/pga_(\d{8})\d{4}\.json/)[1];
+                const match = filename.match(/pga_2020(\d{4})(\d{4})\.json/);
+                if (!match || match.length < 3) {
+                    throw new Error(`文件名格式错误: ${filename}`);
+                }       
+                    
+                const mmdd = match[1]; // 示例：0407
+                const hh = match[2];   // 示例：1900
+                const currentTimestamp = mmdd + hh; // 组合成04071900格式
+                
+                console.log("解析结果:", { 
+                    filename,
+                    mmdd,
+                    hh,
+                    currentTimestamp 
+                });
+
+                // 验证示例：
+                // 输入文件名 pga_202004071900.json → 输出 currentTimestamp = "04071900"
+                // 输入文件名 pga_202004080400.json → 输出 currentTimestamp = "04080400"
+
+                // 更新区域14颜色（时间范围调整为示例中的04071900-04081200）
+                // if (region14Path && !region14Path.empty()) {
+
+                //     if (currentTimestamp >= '04060400' && currentTimestamp <= '04091200') {
+                //         console.log("满足更新区域14颜色条件");
+                //         const color = regionColors['14'][currentTimestamp.slice(0,8)] || '#cccccc';
+                //         region14Path
+                //             .transition()
+                //             .duration(500)
+                //             .attr("fill", color)
+                //             .attr("fill-opacity", 0.7);
+                //     } else {
+                //         // 恢复默认颜色 
+                //         region14Path
+                //             .transition()
+                //             .duration(500)
+                //             .attr("fill", idColors[13]) // idColors[14-1]
+                //             .attr("fill-opacity", 0.3);
+                //     }
+                // }else {
+                //     console.warn("区域14路径未初始化");
+                // }
+            
+                // 更新所有区域颜色
+                REGION_IDS.forEach(id => {
+                    const path = regionPaths.get(String(id));
+                    if (!path || path.empty()) return;
+
+                    // 获取该区域的时间范围（示例逻辑，需根据实际数据调整）
+                    const start = '04060000', end = '04091200';
+                    const color = currentTimestamp >= start && currentTimestamp <= end 
+                        ? regionColors[id][currentTimestamp] || '#cccccc'
+                        : '#cccccc';
+
+                    path.transition()
+                        .duration(500)
+                        .attr("fill", color)
+                        .attr("fill-opacity", color === '#cccccc' ? 0.3 : 0.7);
+                });
+
+
+            // try {
+                // 修复文件名解析逻辑
+                const timeMatch = filename.match(/pga_(\d{8})(\d{4})\.json/);
+                if (!timeMatch) {
+                    console.error("文件名格式错误:", filename);
+                    return;
+                }
+
+                // 提取日期和时间部分（示例文件名：pga_20200406120000.json）
+                const datePart = timeMatch[1];  // 20200406
+                const timePart = timeMatch[2];  // 1200
+                
+                // 格式化成可读时间（YYYY-MM-DD HH:MM）
+                const displayTime = `${datePart.slice(0,4)}-${datePart.slice(4,6)}-${datePart.slice(6,8)} ${timePart.slice(0,2)}:${timePart.slice(2,4)}`;
+                d3.select("#timestamp").text(displayTime);
+
+                // 加载数据
+                const data = await d3.json(DATA_DIR + filename);
+                
+                // 更新可视化
+                svg.selectAll(".pga-path")
+                    .data(data.features)
+                    .join("path")
+                    .attr("class", "pga-path")
+                    .attr("d", path)
+                    .attr("fill", "none")
+                    .attr("stroke", d => colorScale(d.properties.value))
+                    // .attr("stroke-width", d => d.properties.weight)
+                    .attr("stroke-width", 3.5)
+                    .on("mouseover", function(event, d) {
+                        d3.select(this).attr("stroke-width", d.properties.weight * 2);
+                        tooltip
+                            .style("opacity", 1)
+                            .html(`Value: ${d.properties.value}%g`)
+                            .style("left", `${event.pageX + 10}px`)
+                            .style("top", `${event.pageY + 10}px`);
+                    })
+                    .on("mouseout", function(event, d) {
+                        d3.select(this).attr("stroke-width", d.properties.weight);
+                        tooltip.style("opacity", 0);
+                    });
+
+            } catch (error) {
+                console.error(`Error loading ${filename}:`, error);
+            }
+
+            // 更新索引（循环）
+            currentFileIndex = (currentFileIndex + 1) % files.length;
+        }
+
+        // 启动定时器
+        loadAndRender();  // 立即加载第一个文件
+        // setInterval(loadAndRender, INTERVAL);
+
+        // 控制函数
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            const btn = d3.select("#controls button");
+            btn.text(isPlaying ? "⏸️" : "▶️");
+            
+            if (isPlaying) {
+                loadAndRender();  // 立即加载当前文件
+                intervalId = setInterval(loadAndRender, INTERVAL);
+            } else {
+                clearInterval(intervalId);
+            }
+        }
+
+        function changeSpeed(speed) {
+            const display = d3.select("#speed-display");
+            display.text(`${speed}x`);
+            
+            // 计算新间隔（2秒 ÷ 倍速）
+            INTERVAL = 2000 / speed;
+            
+            // 如果正在播放则重置定时器
+            if (isPlaying) {
+                clearInterval(intervalId);
+                intervalId = setInterval(loadAndRender, INTERVAL);
+            }
+        }
+
+        // 初始化流程
+        initMap().then(() => {
+            togglePlay(); // 行政地图加载完成后启动
+        });
+    </script>
+    
+    <svg id="risk-legend" width="150" height="150" style="position:fixed; bottom:20px; left:20px; background: rgba(255,255,255,0.9); border-radius:8px;">
+        <!-- 第三级（外层） -->
+        <path d="M75,75 L75,25 A50,50 0 0 1 125,75 L75,75 Z" 
+              fill="#ff4444" stroke="#fff" stroke-width="2"/>
+        
+        <!-- 第二级（中层） -->
+        <path d="M75,75 L75,45 A30,30 0 0 1 105,75 L75,75 Z" 
+              fill="#ffd700" stroke="#fff" stroke-width="2"/>
+        
+        <!-- 第一级（内层） -->
+        <path d="M75,75 L75,60 A15,15 0 0 1 90,75 L75,75 Z" 
+              fill="#44ff88" stroke="#fff" stroke-width="2"/>
+        
+        <!-- 颜色标签 -->
+        <g font-size="12" fill="#333" text-anchor="start">
+          <!-- 第三级标签 -->
+          <text x="80" y="35">3σ+ (High)</text>
+          <rect x="130" y="30" width="12" height="12" fill="#ff4444"/>
+          
+          <!-- 第二级标签 -->
+          <text x="80" y="55">2σ (Medium)</text>
+          <rect x="130" y="50" width="12" height="12" fill="#ffd700"/>
+          
+          <!-- 第一级标签 -->
+          <text x="80" y="75">1σ (Low)</text>
+          <rect x="130" y="70" width="12" height="12" fill="#44ff88"/>
+        </g>
+        
+        <!-- 七色细分标记 -->
+        <g transform="translate(20,100)">
+          <rect x="0" width="15" height="15" fill="#44ff88"/>
+          <rect x="20" width="15" height="15" fill="#66ccff"/>
+          <rect x="40" width="15" height="15" fill="#ffd700"/>
+          <rect x="60" width="15" height="15" fill="#ffaa33"/>
+          <rect x="80" width="15" height="15" fill="#ff6666"/>
+          <rect x="100" width="15" height="15" fill="#ff4444"/>
+          <rect x="120" width="15" height="15" fill="#cc0000"/>
+          <text y="-5" font-size="10">1σ</text>
+          <text x="20" y="-5" font-size="10">1.5σ</text>
+          <text x="40" y="-5" font-size="10">2σ</text>
+          <text x="60" y="-5" font-size="10">2.5σ</text>
+          <text x="80" y="-5" font-size="10">3σ</text>
+          <text x="100" y="-5" font-size="10">3.5σ</text>
+          <text x="120" y="-5" font-size="10">4σ+</text>
+        </g>
+      </svg>
+</body>
+</html>
