@@ -4,21 +4,39 @@
     <meta charset="UTF-8">
     <title>St.Himark PGA</title>
     <style>
+        /* 新增条形图样式 */
+        #bar-chart .bar { transition: width 0.5s ease; }
+        #bar-chart text { font: 12px sans-serif; }
+        /* #bar-chart .label { fill: #333; } */
+        #bar-chart .label {
+            font: 12px sans-serif;
+            fill: #333;
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #bar-chart .value { fill: #666; }
+            /* 新增布局修正规则 */
+        div[style*="float: left"] {
+            margin-left: 0 !important;
+        }
+
         #controls {
-            position: fixed;
+            /* position: fixed;
             top: 0px;
-            left: 10px;
+            left: 20px;
             background: rgba(255,255,255,0.9);
             padding: 8px;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            z-index: 999;
+            z-index: 999; */
         }
         #timestamp {
             font-size: 24px;
             font-family: Arial, sans-serif;
-            padding: 10px;
-            background: #f0f0f0;
+            /* padding: 10px; */
+            /* background: #f0f0f0; */
         }
         .tooltip {
             position: absolute;
@@ -28,18 +46,158 @@
             pointer-events: none;
             opacity: 0;
         }
+        #risk-legend {
+            position: absolute;
+            left: 30px;         /* 距离地图左边界30px */
+            bottom: 50px;       /* 距离地图底部30px */
+            z-index: 100;       /* 高于地图元素 */
+            pointer-events: none; /* 允许穿透点击 */
+        }
     </style>
 </head>
 <body>
-    <input type="range" min="1" max="10" value="1" oninput="changeSpeed(this.value)">
-    <span id="speed-display">1x</span> <!-- 新增显示元素 -->
-    <div id="controls">
+    <!-- <input type="range" min="1" max="10" value="1" oninput="changeSpeed(this.value)"> -->
+    <!--<span id="speed-display">1x</span>  新增显示元素 -->
+    
+    <!-- <div id="controls">
         <button onclick="togglePlay()">⏸️</button>
         <input type="range" min="1" max="10" onchange="changeSpeed(this.value)">
+    </div> -->
+
+
+    <!-- <div id="controls">
+        <button onclick="togglePlay()">⏸️</button>
+        <input type="range" id="speed-control" 
+               min="1" max="10" value="1"
+               oninput="changeSpeed(this.value)">
+        <span id="speed-display">1x</span>
     </div>
 
-    <div id="timestamp">Loading initial data...</div>
-    <svg width="760" height="600"></svg>
+    <div id="timestamp">Loading initial data...</div> -->
+
+    <div id="header-controls" style="
+        display: flex;
+        align-items: center;
+        position: fixed;
+        top: 0;
+        left: 20px;
+        right: 20px;
+        background: rgba(255,255,255,0.9);
+        padding: 8px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        z-index: 999;
+    ">
+        <!-- 时间戳 -->
+        <div id="timestamp" style="
+            flex: 0 0 200px;
+            margin-right: 20px;
+        ">Loading initial data...</div>
+
+        <!-- 控制条 -->
+        <!-- <div id="controls" style="flex: 1;">
+            <button onclick="togglePlay()">⏸️</button>
+            <input type="range" id="speed-control" 
+                min="1" max="10" value="1"
+                oninput="changeSpeed(this.value)">
+            <span id="speed-display">1x</span>
+        </div> -->
+        <div id="controls" style="flex: 1; display: flex; align-items: center; gap: 10px;">
+            <button onclick="togglePlay()">⏸️</button>
+            <input type="range" id="speed-control" 
+                min="1" max="10" value="1"
+                oninput="changeSpeed(this.value)">
+            <span id="speed-display">1x</span>
+            
+            <!-- 新增回退按钮 -->
+            <button onclick="stepBackward()" 
+                    style="margin-right: 10px;">⏪ -1H</button>
+
+
+            <!-- 新增步进按钮 -->
+            <button onclick="stepForward()" 
+                    style="margin-left: 20px;">⏩ +1H</button>
+        </div>
+    </div>
+
+    <!-- 主内容容器 -->
+    <!-- <div style="position: relative; width: 1560px; margin: 0 auto;"> -->
+    <div style="position: relative; width: 1490px; margin: 80px auto 0;">
+
+        <!-- <svg width="760" height="600"></svg> -->
+        <!-- 新增条形图容器 -->
+        <!-- <svg id="bar-chart" width="760" height="600" 
+            style="position:fixed; left:780px; top:0; 
+            background:rgba(255,255,255,0.9); 
+            border-radius:8px;">
+        </svg> -->
+
+        <div style="position: relative; float: left; margin-right: 10px;">
+
+            <svg width="670" height="550" 
+                style="float: left; "></svg>
+                <!-- margin-right: 20px; -->
+
+            <svg id="risk-legend" 
+                width="150" height="150"
+                style="position: absolute; bottom:40px; left:20px;">
+                <!-- 第三级（外层） -->
+                <path d="M75,75 L75,25 A50,50 0 0 1 125,75 L75,75 Z" 
+                        fill="#ff4444" stroke="#fff" stroke-width="2"/>
+                
+                <!-- 第二级（中层） -->
+                <path d="M75,75 L75,45 A30,30 0 0 1 105,75 L75,75 Z" 
+                        fill="#ffd700" stroke="#fff" stroke-width="2"/>
+                
+                <!-- 第一级（内层） -->
+                <path d="M75,75 L75,60 A15,15 0 0 1 90,75 L75,75 Z" 
+                        fill="#44ff88" stroke="#fff" stroke-width="2"/>
+                
+                <!-- 颜色标签 -->
+                <g font-size="12" fill="#333" text-anchor="start">
+                    <!-- 第三级标签 -->
+                    <text x="80" y="35">3σ+ (High)</text>
+                    <rect x="130" y="30" width="12" height="12" fill="#ff4444"/>
+                    
+                    <!-- 第二级标签 -->
+                    <text x="80" y="55">2σ (Medium)</text>
+                    <rect x="130" y="50" width="12" height="12" fill="#ffd700"/>
+                    
+                    <!-- 第一级标签 -->
+                    <text x="80" y="75">1σ (Low)</text>
+                    <rect x="130" y="70" width="12" height="12" fill="#44ff88"/>
+                </g>
+                
+                <!-- 七色细分标记 -->
+                <g transform="translate(20,100)">
+                    <rect x="0" width="15" height="15" fill="#44ff88"/>
+                    <rect x="20" width="15" height="15" fill="#66ccff"/>
+                    <rect x="40" width="15" height="15" fill="#ffd700"/>
+                    <rect x="60" width="15" height="15" fill="#ffaa33"/>
+                    <rect x="80" width="15" height="15" fill="#ff6666"/>
+                    <rect x="100" width="15" height="15" fill="#ff4444"/>
+                    <rect x="120" width="15" height="15" fill="#cc0000"/>
+                    <text y="-5" font-size="10">1σ</text>
+                    <text x="20" y="-5" font-size="10">1.5σ</text>
+                    <text x="40" y="-5" font-size="10">2σ</text>
+                    <text x="60" y="-5" font-size="10">2.5σ</text>
+                    <text x="80" y="-5" font-size="10">3σ</text>
+                    <text x="100" y="-5" font-size="10">3.5σ</text>
+                    <text x="120" y="-5" font-size="10">4σ+</text>
+                </g>
+            </svg>
+        </div>
+
+        <!-- 右侧条形图 -->
+        <svg id="bar-chart" width="660" height="550"
+            <!-- style="float: left; background: rgba(255,255,255,0.9); border-radius:8px;"> -->
+            style="float: left; margin-left: 10px;">
+
+        </svg>
+
+ 
+    </div>
+
     
     <!-- <script src="https://d3js.org/d3.v7.min.js"></script> -->
     <script src="js/d3.v7.min.js"></script>
@@ -85,13 +243,135 @@
             '14': {} // 结构：{timestamp: color}
         };
 
+
         const REGION_IDS = [2,3,4,7,11,12,13,14,15,18]; // 所有需要处理的区域ID
         let regionPaths = new Map(); // 存储所有区域路径引用
+
+
+        let barData = new Map(); // 存储按时间分组的条形图数据
+        let currentTopData = []; // 当前时段数据
+        // 在全局作用域声明比例尺
+        let xScale, yScale;
+
+        let regionNameMap = new Map();
+
+        // 新增全局变量
+        let animationDuration = 500; // 初始动画持续时间
+
+        let currentSpeed = 1; // 新增速度状态变量
+
+        let globalMaxScore = 0; // 新增全局最大score存储
+
+        // 新增全局变量
+        let isLineChart = false; // 当前是否显示折线图
+        let currentLocation = null; // 当前选中的区域
+        let lineDataCache = new Map(); // 折线图数据缓存
+
+        let currentTimestamp = ''; // 初始化为空字符串
+        let avgDataCache = new Map();
+
+        // 初始化折线图比例尺
+        const lineXScale = d3.scaleLinear().range([0, 600]);
+        const lineYScale = d3.scaleLinear().range([500, 0]);
+
+
+        // 新增颜色转换函数
+        function adjustColor_OLD(hex, opacity = 1) {
+            // 转换HEX到HSL
+            const hsl = d3.hsl(hex);
+            // 补偿透明度带来的亮度损失
+            hsl.l += (1 - opacity) * 0.15; 
+            // 提升饱和度
+            hsl.s = Math.min(hsl.s * 1.2, 1);
+            return hsl.toString();
+        }
+
+        function adjustColor(hex, opacity = 1, baseBg = "#cccccc") {
+            // 计算混合后的颜色
+            const bg = d3.rgb(baseBg);
+            const fg = d3.rgb(hex);
+            
+            const r = Math.round(fg.r * opacity + bg.r * (1 - opacity));
+            const g = Math.round(fg.g * opacity + bg.g * (1 - opacity));
+            const b = Math.round(fg.b * opacity + bg.b * (1 - opacity));
+            
+            return d3.rgb(r, g, b).toString();
+        }
+
+        // 新增步进函数
+        function stepForward_old() {
+
+            if (currentFileIndex < files.length - 1) {
+                currentFileIndex++;
+                loadAndRender(true); // 手动模式不触发自动递增
+            }
+
+            // 暂停当前播放
+            if (isPlaying) {
+                isPlaying = false;
+                clearInterval(intervalId);
+                d3.select("#controls button").text("▶️");
+            }
+            
+            // 边界检查
+            if (currentFileIndex < files.length - 1) {
+                currentFileIndex++;
+                loadAndRender(true); // 传入true表示手动触发
+            } else {
+                console.warn("已到达数据末尾");
+            }
+        }
+
+        function stepForward() {
+            // 暂停播放状态
+            if (isPlaying) {
+                isPlaying = false;
+                clearInterval(intervalId);
+                d3.select("#controls button").text("▶️");
+            }
+
+            // 边界检查与递增
+            if (currentFileIndex < files.length - 1) {
+                loadAndRender(true);
+                currentFileIndex++; // 仅递增一次 
+
+            } else {
+                console.warn("已到达数据末尾");
+            }
+        }
+
+        // 新增步退函数
+        function stepBackward() {
+            // 暂停播放状态
+            if (isPlaying) {
+                isPlaying = false;
+                clearInterval(intervalId);
+                d3.select("#controls button").text("▶️");
+            }
+
+            // 边界检查与递减
+            if (currentFileIndex > 0) {
+                currentFileIndex--;
+                loadAndRender(true);
+            } else {
+                console.warn("已是第一条数据");
+                // 可选：循环到末尾
+                // currentFileIndex = files.length - 1;
+                // loadAndRender(true);
+            }
+        }
 
         async function initMap() {
         try {
             // 加载行政地图数据
             const St_Himak = await d3.json("data/all.json.geojson");
+
+            // 创建ID到名称的映射
+            St_Himak.features.forEach(feature => {
+                const id = feature.properties.id;
+                const name = feature.properties.name;
+                regionNameMap.set(id, name);
+            });
             
             // 统一投影设置
             projection = d3.geoMercator()
@@ -123,12 +403,40 @@
                 //     const id = parseInt(d.properties.id) - 1;
                 //     return idColors[id] || "#cccccc";
                 // })
-                .attr("fill", d => REGION_IDS.includes(Number(d.properties.id)) 
-                    ? "#cccccc" // 初始化为灰色
-                    : idColors[parseInt(d.properties.id)-1])
+                // .attr("fill", d => REGION_IDS.includes(Number(d.properties.id)) 
+                //     ? "#cccccc" // 初始化为灰色
+                //     : idColors[parseInt(d.properties.id)-1])
+                .attr("fill", "#cccccc")  // 所有路径强制灰色
                 .attr("fill-opacity", 0.3)
                 .attr("stroke", "#333")
-                .attr("stroke-width", 0.5);
+                .attr("stroke-width", 0.5)
+                // 修改地图区域点击事件
+
+                .on("click", function(event, d) {
+                        const clickedLocation = d.properties.id;
+                        console.log("在行政图 Clicked region:", clickedLocation);
+                        // 新增安全校验
+                        if (!currentTimestamp) {
+                            console.warn("时间戳未初始化，请等待数据加载完成");
+                            return;
+                        }
+                        
+                        // 切换显示逻辑
+                        if (isLineChart && currentLocation === clickedLocation) {
+                            // 点击相同区域切回柱状图
+                            renderBars(currentTimestamp);
+                            isLineChart = false;
+                        } else {
+                            // 加载折线图数据
+                            currentLocation = clickedLocation;
+                            loadAndRenderLineChart(currentTimestamp, clickedLocation);
+                            isLineChart = true;
+                        }
+                    });
+
+                regions.append("path")
+                    // ...原有属性...
+
 
             // 添加文本标签
             regions.each(function(d) {
@@ -198,6 +506,40 @@
             });
 
 
+             // 加载条形图数据
+            const rawData = await d3.csv("./viz/combined_top3.csv");
+            rawData.forEach(d => {
+                const timeKey = d.time.padStart(8, '0');
+
+                const regionId = d.location.toString(); // 确保转为字符串
+
+                if (!barData.has(timeKey)) barData.set(timeKey, []);
+                barData.get(timeKey).push({
+                    // location: d.location,
+                    location: regionId,
+                    name: regionNameMap.get(regionId) || `未知区域 ${regionId}`, // 处理缺失情况
+
+                    score: +d.score,
+                    color: d.color,
+                    adjustedColor: adjustColor(d.color, 0.7) // 补偿透明度影响
+
+                });
+            });
+
+            // 正确初始化比例尺
+            // const maxScore = d3.max(Array.from(barData.values()).flat(), d => d.score) || 10;
+            globalMaxScore = d3.max(Array.from(barData.values()).flat(), d => d.score) || 10;
+
+            xScale = d3.scaleLinear()
+                // .domain([0, maxScore])
+                .domain([0, globalMaxScore])
+
+                .range([0, 600]);
+
+            yScale = d3.scaleBand()
+                .padding(0.1)
+                .range([0, 500]);
+
         } catch (error) {
             console.error("行政地图加载失败:", error);
         }
@@ -237,10 +579,337 @@
 
         // const path = d3.geoPath().projection(projection);
 
+        function renderBars(timestamp) {
+            console.log("renderBar 渲染条形图数据 timestamp:", timestamp);
+
+            const margin = { top: 20, right: 40, bottom: 30, left: 120 };
+            const chartWidth = 760 - margin.left - margin.right;
+            const chartHeight = 600 - margin.top - margin.bottom;
+
+            // 清除旧图表
+            d3.select("#bar-chart").html('');
+
+            // 创建主容器
+            const svg = d3.select("#bar-chart")
+                .attr("width", chartWidth + margin.left + margin.right)
+                .attr("height", chartHeight + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+
+                
+            const data = barData.get(timestamp) || [];
+            const sorted = data.sort((a,b) => b.score - a.score);
+            // 安全处理空数据情况
+            if (sorted.length === 0) {
+                console.warn(`No data for timestamp: ${timestamp}`);
+                return;
+            }
+            
+            // 更新比例尺
+            // xScale.domain([0, d3.max(sorted, d => d.score)]);
+            xScale.domain([0, globalMaxScore]); // 使用全局最大值
+
+            // yScale.domain(sorted.map(d => d.location));
+            yScale.domain(sorted.map(d => d.location.toString())); // 确保location转为字符串
+
+
+            // 绑定数据
+            const bars = d3.select("#bar-chart")
+                .selectAll(".bar")
+                .data(sorted, d => d.location);
+
+            // 进入动画
+            bars.enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("y", d => yScale(d.location))
+                .attr("height", yScale.bandwidth())
+                .attr("width", 0)
+                // .style("fill", d => d.color)
+                .style("fill", d => d.adjustedColor) // 使用调整后的颜色
+                .style("opacity", 1) // 完全不透明
+
+                .transition()
+                // .duration(500)
+                .duration(animationDuration) // 使用动态时间
+                .ease(d3.easeLinear) // 添加线性过渡
+
+                .attr("width", d => xScale(d.score))
+                // .attr("fill-opacity(0.7)");
+
+            // 添加文本标签
+            d3.select("#bar-chart")
+                .selectAll(".label")
+                .data(sorted)
+                .join("text")
+                .attr("class", "label")
+                .text(d => `Region ${d.location}  ${d.name}`)
+                .attr("x", 10)
+                .attr("y", d => yScale(d.location) + 15);
+
+            // 在renderBars函数中添加
+            bars.enter()
+                .append("text")
+                .attr("class", "value-label")
+                .attr("x", d => xScale(d.score) + 5) // 右侧留5px间距
+                .attr("y", d => yScale(d.location) + yScale.bandwidth()/2)
+                .attr("dy", "0.35em")
+                .style("font-size", "14px")
+                .text( d => `score ${d.score.toFixed(2)}`);
+            }
+
+        // 新增折线图加载函数
+        async function loadAndRenderLineChart(hour, location) {
+            // 转换时间格式 04060000 -> 040600
+            const formattedHour = hour.slice(0, 6);
+            console.log("加载折线图数据:", formattedHour, location);
+
+            // 加载平均值数据
+            if (!avgDataCache.size) {
+                const avgData = await d3.csv("viz/statProStudeAlle.csv");
+                avgData.forEach(d => {
+                    avgDataCache.set(d.hour, +d.avg);
+                });
+            }
+            // 获取当前时段的平均值
+            const currentAvg = avgDataCache.get(formattedHour + "00") || 0; // 匹配8位格式
+            console.log("当前时段平均值:",formattedHour,  currentAvg);
+            
+            // 检查缓存
+            if (!lineDataCache.has(formattedHour)) {
+                const rawData = await d3.csv("viz/statProMinute.csv");
+                lineDataCache.set(formattedHour, rawData);
+            }
+
+            // 过滤数据
+            const filteredData = lineDataCache.get(formattedHour)
+                .filter(d => d.hour === formattedHour && d.location == location)
+                .sort((a,b) => a.minu - b.minu);
+
+            // 清空右侧图表
+            d3.select("#bar-chart").html('');
+
+            // 设置比例尺
+            lineXScale.domain([0, 59]);
+            lineYScale.domain([0, d3.max(filteredData, d => +d.count)]);
+
+            // 创建折线生成器
+            const line = d3.line()
+                .x(d => lineXScale(d.minu))
+                .y(d => lineYScale(d.count));
+
+            // 绘制折线图
+            const svg = d3.select("#bar-chart")
+                .attr("width", 760)
+                .attr("height", 600)
+                .append("g")
+                .attr("transform", "translate(80,40)");
+
+            // 绘制折线
+            svg.append("path")
+                .datum(filteredData)
+                .attr("class", "line-chart")
+                .attr("d", line)
+                .attr("stroke", "steelblue")
+                .attr("fill", "none")
+                .attr("stroke-width", 2);
+
+            // 添加坐标轴
+            svg.append("g")
+                .attr("transform", `translate(0,500)`)
+                .call(d3.axisBottom(lineXScale).ticks(12));
+
+            svg.append("g")
+                .call(d3.axisLeft(lineYScale));
+
+            // 添加标签
+            svg.append("text")
+                .attr("transform", "translate(300,550)")
+                .text("Minutes");
+
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", -50)
+                .attr("x", -200)
+                .text("Report Count");
+            // 添加标题
+            const regionName = regionNameMap.get(location.toString()) || "未知区域";
+            svg.append("text")
+                .attr("x", 50)  // 居中位置
+                .attr("y", 10)   // 距离顶部20px
+                .style("text-anchor", "start")
+                .style("font-size", "13px")
+                .style("font-weight", "bold")
+                .text(`${location} - ${regionName}`);
+        
+            // 新增：计算总报告数
+            const total = d3.sum(filteredData, d => +d.count);
+            const maxValue = Math.max(total, currentAvg);
+
+            // 创建柱状图比例尺
+            // const barYScale = d3.scaleLinear()
+            //     .domain([0, d3.max([total, 1])]) // 最小值设为0，确保空数据可见
+            //     .range([500, 0]);
+
+            const barYScale = d3.scaleLinear()
+                .domain([0, maxValue * 1.05])  // 增加5%的顶部空间
+                .range([500, 0])  // 总高度500px
+                .nice(); // 自动调整到最接近的整数
+            
+            // 安全高度计算函数
+            const calculateSafeHeight = (value) => {
+                const rawY = barYScale(value);
+                const pixelHeight = 500 - rawY;
+                return Math.max(Math.min(pixelHeight, 500), 10); // 限制在10-500px之间
+            };
+
+            // 在右侧添加柱状图容器
+            const barGroup = svg.append("g")
+                .attr("transform", "translate(600,0)"); // 右侧留出空间
+
+            // 关键修改点3：设置最小高度（至少显示10px）
+            // const totalHeight = Math.max(500 - barYScale(total), 20);
+            // const avgHeight = Math.max(500 - barYScale(currentAvg), 20);
+
+            // 应用安全高度
+            const totalHeight = calculateSafeHeight(total);
+            const avgHeight = calculateSafeHeight(currentAvg);
+
+            // 计算精确Y位置
+            const getValidYPosition = (value) => {
+                const rawY = barYScale(value);
+                return Math.max(rawY, 0); // 防止负值
+            };
+
+            // 绘制柱状图
+            barGroup.append("rect")
+                .attr("x", 0)
+                .attr("width", 30)
+                // .attr("height", 500 - barYScale(total))
+                .attr("height", totalHeight) // 应用计算后的高度
+
+                // .attr("y", barYScale(total))
+                .attr("y", getValidYPosition(total))
+
+                .attr("fill", "#4CAF50")
+                .attr("rx", 3) // 圆角
+                .transition()
+                .duration(500)
+                // .attr("height", 500 - barYScale(total));
+
+            // 添加数值标签
+            barGroup.append("text")
+                .attr("x", 30)
+                .attr("y", barYScale(total) - 10)
+                .attr("text-anchor", "middle")
+                .style("font-size", "14px")
+                .style("fill", "#333")
+                .text(total);
+
+            // 添加标题
+            barGroup.append("text")
+                .attr("x", 30)
+                .attr("y", 530)
+                .attr("text-anchor", "middle")
+                .style("font-size", "12px")
+                .text("总报告数");
+                
+            // 在右侧添加平均值柱状图
+            const avgBarGroup = svg.append("g")
+                .attr("transform", "translate(700,0)"); // 在总报告数柱右侧
+
+
+
+            // 使用相同比例尺
+            // const maxValue = d3.max([total, currentAvg]);
+            barYScale.domain([0, maxValue]);
+
+            // 绘制平均值柱状图
+            avgBarGroup.append("rect")
+                .attr("x", 5)
+                .attr("width", 30)
+                // .attr("height", 500 - barYScale(currentAvg))
+                .attr("height", avgHeight) // 应用计算后的高度
+
+                // .attr("y", barYScale(currentAvg))
+                .attr("y", getValidYPosition(currentAvg))
+
+                .attr("fill", "#FFA500") // 橙色区分
+                .attr("rx", 3)
+                .transition()
+                .duration(500)
+                // .attr("height", 500 - barYScale(currentAvg));
+
+            // 添加数值标签
+            avgBarGroup.append("text")
+                .attr("x", 30)
+                .attr("y", barYScale(currentAvg) - 10)
+                .attr("text-anchor", "middle")
+                .style("font-size", "14px")
+                .style("fill", "#333")
+                .text(currentAvg.toFixed(1));
+
+            // 添加标题
+            avgBarGroup.append("text")
+                .attr("x", 30)
+                .attr("y", 530)
+                .attr("text-anchor", "middle")
+                .style("font-size", "12px")
+                .text("区域均值");
+
+            // 调整折线图宽度（原760改为600）
+
+            // 添加调试输出
+
+            console.log("比例尺验证:", {
+                // 原始数据
+                totalReports: total,
+                averageValue: currentAvg,
+                
+                // 比例尺设置
+                scaleDomain: barYScale.domain(),  // 显示当前域值
+                scaleRange: barYScale.range(),    // 显示映射范围
+                
+                // 计算细节
+                totalBar: {
+                    rawY: barYScale(total),      // 原始映射Y坐标
+                    pixelHeight: totalHeight,   // 实际渲染高度
+                    finalY: barYScale(total) + totalHeight // 实际底部坐标
+                },
+                avgBar: {
+                    rawY: barYScale(currentAvg),
+                    pixelHeight: avgHeight,
+                    finalY: barYScale(currentAvg) + avgHeight
+                },
+                
+                // 安全限制
+                containerHeight: 500             // 容器总高度
+            });
+
+            lineXScale.range([0, 520]); 
+        }
+
+
         // 主加载逻辑
         let currentFileIndex = 0;
+
+        // 在初始化时设置控件状态
+        function initControls() {
+            d3.select("#speed-control")
+                .attr("value", 1)
+                .attr("min", 1)
+                .attr("max", 10)
+                .attr("step", 1);
+        }
         
-        async function loadAndRender() {
+        // async function loadAndRender() {
+        async function loadAndRender(isManual = false) {
+            // 修改索引更新逻辑
+            // if (!isManual) {
+            //     currentFileIndex = (currentFileIndex + 1) % files.length;
+            // }
+
             const filename = files[currentFileIndex];
             console.log("加载文件:", filename);
 
@@ -254,7 +923,9 @@
                     
                 const mmdd = match[1]; // 示例：0407
                 const hh = match[2];   // 示例：1900
-                const currentTimestamp = mmdd + hh; // 组合成04071900格式
+                // const currentTimestamp = mmdd + hh; // 组合成04071900格式
+                currentTimestamp = mmdd + hh; // 组合成04071900格式
+
                 
                 console.log("解析结果:", { 
                     filename,
@@ -262,6 +933,10 @@
                     hh,
                     currentTimestamp 
                 });
+
+
+                // renderBars(currentTimestamp.padStart(8, '0'));
+                renderBars(currentTimestamp);
 
                 // 验证示例：
                 // 输入文件名 pga_202004071900.json → 输出 currentTimestamp = "04071900"
@@ -296,7 +971,7 @@
                     if (!path || path.empty()) return;
 
                     // 获取该区域的时间范围（示例逻辑，需根据实际数据调整）
-                    const start = '04060000', end = '04091200';
+                    const start = '04060000', end = '04091600';
                     const color = currentTimestamp >= start && currentTimestamp <= end 
                         ? regionColors[id][currentTimestamp] || '#cccccc'
                         : '#cccccc';
@@ -336,7 +1011,9 @@
                     .attr("fill", "none")
                     .attr("stroke", d => colorScale(d.properties.value))
                     // .attr("stroke-width", d => d.properties.weight)
-                    .attr("stroke-width", 3.5)
+                    .attr("stroke-width", 5)
+                    // .attr("stroke-width", d => d.properties.weight) // 使用数据中的实际权重值
+
                     .on("mouseover", function(event, d) {
                         d3.select(this).attr("stroke-width", d.properties.weight * 2);
                         tooltip
@@ -346,7 +1023,10 @@
                             .style("top", `${event.pageY + 10}px`);
                     })
                     .on("mouseout", function(event, d) {
-                        d3.select(this).attr("stroke-width", d.properties.weight);
+                        d3.select(this)
+                        // .attr("stroke-width", d.properties.weight)
+                        .attr("stroke-width", 5)
+                        ;
                         tooltip.style("opacity", 0);
                     });
 
@@ -355,7 +1035,12 @@
             }
 
             // 更新索引（循环）
-            currentFileIndex = (currentFileIndex + 1) % files.length;
+            // currentFileIndex = (currentFileIndex + 1) % files.length;
+
+            // 仅自动播放时递增索引
+            if (!isManual) {
+                currentFileIndex = (currentFileIndex + 1) % files.length;
+            }
         }
 
         // 启动定时器
@@ -377,11 +1062,22 @@
         }
 
         function changeSpeed(speed) {
+            currentSpeed = Number(speed);
+
             const display = d3.select("#speed-display");
-            display.text(`${speed}x`);
+
+            // 保持控件与状态同步
+            d3.select("#speed-control")
+                .property("value", currentSpeed);
+            
+            display.text(`${currentSpeed}x`);
+            // display.text(`${speed}x`);
             
             // 计算新间隔（2秒 ÷ 倍速）
             INTERVAL = 2000 / speed;
+
+            animationDuration = 500 / speed; // 动态调整动画时间
+
             
             // 如果正在播放则重置定时器
             if (isPlaying) {
@@ -392,55 +1088,12 @@
 
         // 初始化流程
         initMap().then(() => {
+            initControls(); // 新增初始化
+
             togglePlay(); // 行政地图加载完成后启动
         });
     </script>
     
-    <svg id="risk-legend" width="150" height="150" style="position:fixed; bottom:20px; left:20px; background: rgba(255,255,255,0.9); border-radius:8px;">
-        <!-- 第三级（外层） -->
-        <path d="M75,75 L75,25 A50,50 0 0 1 125,75 L75,75 Z" 
-              fill="#ff4444" stroke="#fff" stroke-width="2"/>
-        
-        <!-- 第二级（中层） -->
-        <path d="M75,75 L75,45 A30,30 0 0 1 105,75 L75,75 Z" 
-              fill="#ffd700" stroke="#fff" stroke-width="2"/>
-        
-        <!-- 第一级（内层） -->
-        <path d="M75,75 L75,60 A15,15 0 0 1 90,75 L75,75 Z" 
-              fill="#44ff88" stroke="#fff" stroke-width="2"/>
-        
-        <!-- 颜色标签 -->
-        <g font-size="12" fill="#333" text-anchor="start">
-          <!-- 第三级标签 -->
-          <text x="80" y="35">3σ+ (High)</text>
-          <rect x="130" y="30" width="12" height="12" fill="#ff4444"/>
-          
-          <!-- 第二级标签 -->
-          <text x="80" y="55">2σ (Medium)</text>
-          <rect x="130" y="50" width="12" height="12" fill="#ffd700"/>
-          
-          <!-- 第一级标签 -->
-          <text x="80" y="75">1σ (Low)</text>
-          <rect x="130" y="70" width="12" height="12" fill="#44ff88"/>
-        </g>
-        
-        <!-- 七色细分标记 -->
-        <g transform="translate(20,100)">
-          <rect x="0" width="15" height="15" fill="#44ff88"/>
-          <rect x="20" width="15" height="15" fill="#66ccff"/>
-          <rect x="40" width="15" height="15" fill="#ffd700"/>
-          <rect x="60" width="15" height="15" fill="#ffaa33"/>
-          <rect x="80" width="15" height="15" fill="#ff6666"/>
-          <rect x="100" width="15" height="15" fill="#ff4444"/>
-          <rect x="120" width="15" height="15" fill="#cc0000"/>
-          <text y="-5" font-size="10">1σ</text>
-          <text x="20" y="-5" font-size="10">1.5σ</text>
-          <text x="40" y="-5" font-size="10">2σ</text>
-          <text x="60" y="-5" font-size="10">2.5σ</text>
-          <text x="80" y="-5" font-size="10">3σ</text>
-          <text x="100" y="-5" font-size="10">3.5σ</text>
-          <text x="120" y="-5" font-size="10">4σ+</text>
-        </g>
-      </svg>
+    
 </body>
 </html>
